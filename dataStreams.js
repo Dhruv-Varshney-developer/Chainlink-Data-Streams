@@ -82,8 +82,7 @@ async function fetchReport(symbol, feedId) {
 }
 
 async function main() {
-  console.log("🚨 CHAINLINK DATA STREAMS BUG EVIDENCE");
-  console.log("=========================================");
+
   console.log(`Timestamp: ${new Date().toISOString()}`);
   console.log(`Base URL: ${BASE_URL}`);
 
@@ -118,26 +117,7 @@ async function main() {
   console.log(`   Timestamp: ${btcReport.timestamp}`);
   console.log(`   Report Prefix: ${btcReport.reportPrefix}...`);
 
-  console.log("\n🚨 BUG ANALYSIS");
-  console.log("================");
-
-  const sameFeedId = ethReport.returnedFeedId === btcReport.returnedFeedId;
-  const samePrice = ethReport.extractedPrice === btcReport.extractedPrice;
-  const sameReport = ethReport.reportPrefix === btcReport.reportPrefix;
-  const sameTimestamp = ethReport.timestamp === btcReport.timestamp;
-
-  console.log(
-    `✅ Feed IDs correct: ${
-      ethReport.requestedFeedId === ethReport.returnedFeedId &&
-      btcReport.requestedFeedId === btcReport.returnedFeedId
-    }`
-  );
-  console.log(
-    `🚨 Same price returned: ${samePrice} (${ethReport.extractedPrice} vs ${btcReport.extractedPrice})`
-  );
-  console.log(`🚨 Same report data: ${sameReport}`);
-  console.log(`🚨 Same timestamp: ${sameTimestamp}`);
-  console.log(`🚨 Feeds returning identical data: ${sameFeedId}`);
+ 
 
   // Expected ranges
   const ethInExpectedRange =
@@ -151,21 +131,7 @@ async function main() {
     `BTC price in expected range (30000-150000): ${btcInExpectedRange}`
   );
 
-  if (samePrice || sameReport) {
-    console.log("\n🎯 CONCLUSION: BUG CONFIRMED");
-    console.log(
-      "Both feeds are returning identical data when they should return different prices."
-    );
-    console.log(
-      "This suggests a testnet configuration issue where both feeds point to the same data source."
-    );
-  } else {
-    console.log("\n✅ CONCLUSION: NO BUG DETECTED");
-    console.log("Feeds are returning different data as expected.");
-  }
-
-  console.log("\n📋 RAW DATA FOR CHAINLINK TEAM");
-  console.log("===============================");
+  
   console.log(
     "ETH/USD Raw Report:",
     JSON.stringify(
