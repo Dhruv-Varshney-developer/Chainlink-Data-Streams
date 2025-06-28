@@ -138,7 +138,7 @@ async function main() {
       {
         feedID: ethReport.returnedFeedId,
         timestamp: ethReport.timestamp,
-        fullReport: ethReport.fullReport.substring(0, 200) + "...",
+        fullReport: ethReport.fullReport,
       },
       null,
       2
@@ -151,7 +151,7 @@ async function main() {
       {
         feedID: btcReport.returnedFeedId,
         timestamp: btcReport.timestamp,
-        fullReport: btcReport.fullReport.substring(0, 200) + "...",
+        fullReport: btcReport.fullReport,
       },
       null,
       2
