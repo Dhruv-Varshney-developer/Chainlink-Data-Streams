@@ -30,17 +30,47 @@ function generateAuthHeaders(method, path, apiKey, apiSecret) {
   };
 }
 
-function extractPrice(fullReport) {
+function decodeChainlinkReport(fullReport) {
   try {
     const buffer = Buffer.from(fullReport.slice(2), "hex");
-    if (buffer.length >= 64) {
-      const priceHex = buffer.slice(32, 64).toString("hex");
-      const priceWei = BigInt("0x" + priceHex);
-      return Number(priceWei) / 1e2;
-    }
-    return 0;
+
+    // CORRECT positions based on actual data analysis:
+    // Position 8: Feed ID (offset 256)
+    const feedId = "0x" + buffer.slice(256, 288).toString("hex");
+
+    // Position 9: validFromTimestamp (offset 288)
+    const validFromTimestamp = buffer.readUInt32BE(284); // Last 4 bytes of the 32-byte slot
+
+    // Position 10: observationsTimestamp (offset 320)
+    const observationsTimestamp = buffer.readUInt32BE(316); // Last 4 bytes of the 32-byte slot
+
+    // Position 14: Benchmark Price (offset 448)
+    const priceBytes = buffer.slice(448, 480);
+    const priceWei = BigInt("0x" + priceBytes.toString("hex"));
+    const price = Number(priceWei) / 1e18;
+
+    // Position 15: Bid (offset 480)
+    const bidBytes = buffer.slice(480, 512);
+    const bidWei = BigInt("0x" + bidBytes.toString("hex"));
+    const bid = Number(bidWei) / 1e18;
+
+    // Position 16: Ask (offset 512)
+    const askBytes = buffer.slice(512, 544);
+    const askWei = BigInt("0x" + askBytes.toString("hex"));
+    const ask = Number(askWei) / 1e18;
+
+    return {
+      feedId,
+      validFromTimestamp,
+      observationsTimestamp,
+      benchmarkPrice: price,
+      bid,
+      ask,
+      rawReport: fullReport,
+    };
   } catch (error) {
-    return 0;
+    console.error("Decode error:", error);
+    return null;
   }
 }
 
@@ -50,7 +80,6 @@ async function fetchReport(symbol, feedId) {
 
   console.log(`\n🔍 Fetching ${symbol} report...`);
   console.log(`Feed ID: ${feedId}`);
-  console.log(`URL: ${BASE_URL}${path}`);
 
   try {
     const response = await fetch(`${BASE_URL}${path}`, {
@@ -63,18 +92,22 @@ async function fetchReport(symbol, feedId) {
     }
 
     const data = await response.json();
-    const extractedPrice = extractPrice(data.report.fullReport);
+    const decodedReport = decodeChainlinkReport(data.report.fullReport);
 
-    return {
-      symbol,
-      feedId,
-      requestedFeedId: feedId,
-      returnedFeedId: data.report.feedID,
-      extractedPrice,
-      timestamp: data.report.observationsTimestamp,
-      reportPrefix: data.report.fullReport.substring(0, 100),
-      fullReport: data.report.fullReport,
-    };
+    if (!decodedReport) {
+      throw new Error("Failed to decode report");
+    }
+
+    console.log(`\n🔸 ${symbol} Report:`);
+    console.log(`   Feed ID: ${decodedReport.feedId}`);
+    console.log(
+      `   Benchmark Price: $${decodedReport.benchmarkPrice.toLocaleString()}`
+    );
+    console.log(`   Bid: $${decodedReport.bid.toLocaleString()}`);
+    console.log(`   Ask: $${decodedReport.ask.toLocaleString()}`);
+    console.log(`   Timestamp: ${decodedReport.observationsTimestamp}`);
+
+    return decodedReport;
   } catch (error) {
     console.error(`❌ Error fetching ${symbol}:`, error.message);
     return null;
@@ -82,7 +115,6 @@ async function fetchReport(symbol, feedId) {
 }
 
 async function main() {
-
   console.log(`Timestamp: ${new Date().toISOString()}`);
   console.log(`Base URL: ${BASE_URL}`);
 
@@ -105,25 +137,25 @@ async function main() {
   console.log("\n📊 RESULTS COMPARISON");
   console.log("=====================");
 
-  console.log("\n🔸 ETH/USD Report:");
-  console.log(`   Feed ID: ${ethReport.returnedFeedId}`);
-  console.log(`   Price: $${ethReport.extractedPrice.toLocaleString()}`);
-  console.log(`   Timestamp: ${ethReport.timestamp}`);
-  console.log(`   Report Prefix: ${ethReport.reportPrefix}...`);
+  console.log("\n🔸 ETH/USD Summary:");
+  console.log(`   Feed ID: ${ethReport.feedId}`);
+  console.log(`   Price: $${ethReport.benchmarkPrice.toLocaleString()}`);
+  console.log(`   Bid: $${ethReport.bid.toLocaleString()}`);
+  console.log(`   Ask: $${ethReport.ask.toLocaleString()}`);
+  console.log(`   Timestamp: ${ethReport.observationsTimestamp}`);
 
-  console.log("\n🔸 BTC/USD Report:");
-  console.log(`   Feed ID: ${btcReport.returnedFeedId}`);
-  console.log(`   Price: $${btcReport.extractedPrice.toLocaleString()}`);
-  console.log(`   Timestamp: ${btcReport.timestamp}`);
-  console.log(`   Report Prefix: ${btcReport.reportPrefix}...`);
-
- 
+  console.log("\n🔸 BTC/USD Summary:");
+  console.log(`   Feed ID: ${btcReport.feedId}`);
+  console.log(`   Price: $${btcReport.benchmarkPrice.toLocaleString()}`);
+  console.log(`   Bid: $${btcReport.bid.toLocaleString()}`);
+  console.log(`   Ask: $${btcReport.ask.toLocaleString()}`);
+  console.log(`   Timestamp: ${btcReport.observationsTimestamp}`);
 
   // Expected ranges
   const ethInExpectedRange =
-    ethReport.extractedPrice >= 1500 && ethReport.extractedPrice <= 8000;
+    ethReport.benchmarkPrice >= 1500 && ethReport.benchmarkPrice <= 8000;
   const btcInExpectedRange =
-    btcReport.extractedPrice >= 30000 && btcReport.extractedPrice <= 150000;
+    btcReport.benchmarkPrice >= 30000 && btcReport.benchmarkPrice <= 150000;
 
   console.log(`\n📈 PRICE RANGE ANALYSIS`);
   console.log(`ETH price in expected range (1500-8000): ${ethInExpectedRange}`);
@@ -131,14 +163,14 @@ async function main() {
     `BTC price in expected range (30000-150000): ${btcInExpectedRange}`
   );
 
-  
+  // Raw reports
   console.log(
-    "ETH/USD Raw Report:",
+    "\nETH/USD Raw Report:",
     JSON.stringify(
       {
-        feedID: ethReport.returnedFeedId,
-        timestamp: ethReport.timestamp,
-        fullReport: ethReport.fullReport,
+        feedID: ethReport.feedId,
+        timestamp: ethReport.observationsTimestamp,
+        fullReport: ethReport.rawReport,
       },
       null,
       2
@@ -149,9 +181,9 @@ async function main() {
     "\nBTC/USD Raw Report:",
     JSON.stringify(
       {
-        feedID: btcReport.returnedFeedId,
-        timestamp: btcReport.timestamp,
-        fullReport: btcReport.fullReport,
+        feedID: btcReport.feedId,
+        timestamp: btcReport.observationsTimestamp,
+        fullReport: btcReport.rawReport,
       },
       null,
       2
